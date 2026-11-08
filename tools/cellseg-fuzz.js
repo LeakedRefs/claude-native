@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Rob Kubicki
+//
 // cellseg-fuzz.js -- differential test: bun-ant/cellsegmenter.js against the
 // real Bun.ant.CellSegmenter in Anthropic's Linux runtime.
 //

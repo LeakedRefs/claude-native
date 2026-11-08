@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Rob Kubicki
+//
 // embedded-tools.js -- stand in for the tools built into Anthropic's runtime.
 //
 // Anthropic's build of Bun has ripgrep, ugrep and bfs compiled in: when the

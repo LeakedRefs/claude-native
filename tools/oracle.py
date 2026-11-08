@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Rob Kubicki
 """Graft JavaScript files onto a Bun 1.4.4 --compile runtime (host-side tool).
 
 Usage: oracle.py <runtime-exe> <out-exe> <entry.js> [more.js ...]

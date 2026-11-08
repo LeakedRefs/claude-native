@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Rob Kubicki
+// Portions copyright (c) Oven (oven-sh/bun), MIT.
+//
 // cellsegmenter.js -- JavaScript replacement for Bun.ant.CellSegmenter.
 //
 // Anthropic's private Bun build provides Bun.ant.CellSegmenter natively;

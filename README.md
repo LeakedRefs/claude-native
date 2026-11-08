@@ -119,3 +119,17 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 | `tools/gen-fused-data.py` | regenerates `bun-ant/fused-data.js` from Bun's tables |
 | `tools/oracle.py` | grafts test JavaScript onto Anthropic's Linux runtime |
 | `tools/cellseg-fuzz.js` | differential test against the native class (Linux) |
+
+## License
+
+MIT; see [LICENSE](../LICENSE) at the repository root. Include it when
+distributing `install.sh`, `regraft.js` and `bun-ant/`.
+
+`bun-ant/clusters.js`, `bun-ant/cellsegmenter.js` and `bun-ant/fused-data.js`
+port code and tables from [Bun](https://github.com/oven-sh/bun)
+(copyright Oven, MIT). The tables in `fused-data.js` derive from Unicode
+data ([Unicode License v3](https://www.unicode.org/license.txt)).
+
+This license covers only the files in this repository. Claude Code itself,
+the official build the installer downloads, and the converted binary it
+produces remain under Anthropic's terms.

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Rob Kubicki
+// Portions copyright (c) Oven (oven-sh/bun), MIT.
+//
 // clusters.js -- grapheme clustering and cluster width, a port of Bun v1.4.4
 // src/jsc/bindings/stringWidth.cpp (uucode grapheme break algorithm).
 import { FUSED_DELTAS, FUSED_VALUES } from "./fused-data.js";

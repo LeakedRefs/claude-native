@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Rob Kubicki
+//
 // regraft.js -- move a Bun --compile module graph onto another Bun runtime.
 //
 // Usage: bun regraft.js <source-exe> <template-exe> <output-exe>
