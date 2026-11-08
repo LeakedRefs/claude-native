@@ -53,8 +53,8 @@ of Bun that adds:
    executable as `ugrep` and `bfs`.
 
 The graph also contains two Linux native addons (`.node` files):
-`clipboard-napi.node` for image paste and `audio-capture.node` for voice
-input.
+`clipboard-napi.node`, which copies text to the clipboard, and
+`audio-capture.node` for voice input.
 
 ## The approach: move the graph, keep the code
 
@@ -96,7 +96,8 @@ flowchart LR
 5. Checks that the converted binary reports the expected version, then
    installs it where Anthropic's own installer would
    (`~/.local/share/claude/versions/`, symlinked from `~/.local/bin/claude`).
-6. Writes two settings (below) and optionally installs desktop fonts.
+6. Writes two settings (below) and optionally installs desktop fonts and
+   a clipboard tool.
 
 ### What `regraft.js` does
 
@@ -108,7 +109,9 @@ flowchart LR
   encoding, and the graph's entry point.
 - **Drops:** JavaScriptCore bytecode, which was produced by Anthropic's
   Linux runtime, and the flags that describe it. FreeBSD Bun parses the
-  source instead. Also drops the two Linux native addons.
+  source instead. Also drops the two Linux native addons. Voice input is
+  lost. Copying text to the clipboard falls back to `xclip`, `wl-copy`,
+  `xsel` or OSC 52. Image paste never used the addon (see below).
 - **Adds:** four modules under `/$bunfs/root/freebsd/` (the `bun-ant/`
   files) and a generated `prelude.js`, which becomes the new entry point.
 - **Writes:** the template's runtime with the new graph in its `.bun`
@@ -146,6 +149,19 @@ only as machine code in Anthropic's runtime, so it was rewritten in
 JavaScript. Grapheme and width rules port Bun's own
 `stringWidth.cpp` and its Unicode 17 tables, adjusted for the two places
 where Anthropic's runtime differs from upstream Bun.
+
+### Image paste
+
+Claude Code reads clipboard images with external commands, not the addon.
+It runs `xclip -selection clipboard -t TARGETS -o` (or `wl-paste -l`) to
+look for an image, saves it with `xclip -t image/png` (or `wl-paste
+--type image/png`, with BMP as a fallback), then decodes and resizes it
+with `Bun.Image`. The choice of commands was fixed when Anthropic built the
+Linux binary, so the converted binary uses the Linux commands, which are
+also what FreeBSD's X11 and Wayland desktops use. `Bun.Image` is part of
+stock Bun and works in the FreeBSD build. With `x11/xclip` installed, Ctrl+V
+pastes images in an xfce terminal on FreeBSD 15.1. `install.sh` offers
+`xclip`, or `wl-clipboard` on Wayland, in its desktop prompt.
 
 ### Settings
 
@@ -198,8 +214,22 @@ to the Claude Code binary it needs:
 - `linprocfs`, `linsysfs`, `fdescfs`, `devfs` and `tmpfs` mounted under
   `/compat/linux`, which `service linux start` sets up.
 
-The native build needs none of these. It is a FreeBSD binary linked against
-the base system, plus four ordinary packages (`ripgrep`, `ugrep`, `bfs`,
+The native build needs none of these. It is a FreeBSD binary linked only
+against base-system libraries (Claude Code 2.1.319 on FreeBSD 15.1):
+
+```
+$ ldd ~/.local/share/claude/versions/2.1.319
+	libc.so.7 => /lib/libc.so.7
+	libthr.so.3 => /lib/libthr.so.3
+	libm.so.5 => /lib/libm.so.5
+	libc++.so.1 => /lib/libc++.so.1
+	libcxxrt.so.1 => /lib/libcxxrt.so.1
+	libsys.so.7 => /lib/libsys.so.7
+	libgcc_s.so.1 => /lib/libgcc_s.so.1
+```
+
+It runs on a system with no Linux ABI module loaded and no `/compat/linux`.
+At run time it needs four ordinary packages (`ripgrep`, `ugrep`, `bfs`,
 `bash`). It needs no root access to run and no extra kernel state, so a
 jail needs no Linux ABI setup to run it (jails have not been tested yet).
 
@@ -251,7 +281,8 @@ several things the native build gives up:
 | Startup | parses source (no bytecode) | precompiled bytecode |
 | `CellSegmenter` | JavaScript, about 9x slower per call (about 1 ms per full screen) | native |
 | Right-to-left reordering in Windows Terminal / VS Code terminals | not implemented | native |
-| Image paste, voice input | unavailable (Linux addons dropped) | depends on Linux libraries for the addons |
+| Image paste | works, via `xclip` / `wl-paste` | works, via the same commands |
+| Voice input | unavailable (Linux addon dropped) | depends on Linux libraries for the addon |
 | Updates | rerun `install.sh` | Claude Code's own updater |
 
 These are documented in the known gaps of [README.md](README.md) and

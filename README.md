@@ -18,17 +18,18 @@ are installed with `pkg install` through doas, sudo or su, which needs a
 terminal.
 
 At the end, the script asks whether you will use Claude Code in a terminal
-on a graphical desktop. If you answer yes, it installs the fonts below for
-any symbols your scalable fonts lack (desktop terminals show empty boxes
-for them otherwise):
+on a graphical desktop. If you answer yes, it installs whichever of these
+are missing:
 
-| Package | Symbols |
+| Package | Why |
 |---|---|
 | `noto-sans-symbols` | `⎿` (U+23BF), the connector under each tool call |
 | `noto-sans-symbols2` | `⏵` `⏸` `⏺` (U+23F5, U+23F8, U+23FA), mode indicators and bullet |
+| `xclip`, or `wl-clipboard` on Wayland | pasting images with Ctrl+V |
 
-Restart the terminal afterwards. Text consoles and remote sessions do not
-need them.
+Without the fonts, desktop terminals show empty boxes for those symbols;
+restart the terminal after installing them. Text consoles and remote
+sessions need none of these (Claude Code does not paste images over SSH).
 
 To update, run the script again. Claude Code's own updater is disabled
 (see below).
@@ -59,8 +60,11 @@ Claude Code's JavaScript is never modified. What `regraft.js` drops:
 
 - **JavaScriptCore bytecode.** It was built by Anthropic's Linux runtime.
   FreeBSD Bun parses the source instead.
-- **Two Linux native addons:** `clipboard-napi.node` (image paste) and
-  `audio-capture.node` (voice input). Those features are unavailable.
+- **Two Linux native addons:** `clipboard-napi.node` and
+  `audio-capture.node`. Voice input is unavailable. Image paste still
+  works: Claude Code reads images from the clipboard by running `xclip` or
+  `wl-paste`, not through the addon, which it uses only to copy text (and
+  that falls back to `xclip`, `wl-copy`, `xsel` or OSC 52).
 
 What `regraft.js` adds: Anthropic runs Claude Code on its own build of Bun,
 which has a native `Bun.ant` namespace that stock Bun lacks. One part of it,
@@ -106,7 +110,7 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 
 ## Known gaps
 
-- Image paste and voice input do not work (Linux-only native addons).
+- Voice input does not work (Linux-only native addon).
 - amd64 only so far.
 - Old versions are not pruned from `versions/` (about 170 MB each).
 - Right-to-left text is not reordered in Windows Terminal and VS Code

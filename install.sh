@@ -252,15 +252,17 @@ mkdir -p "$(dirname "$SETTINGS")"
 	fs.writeFileSync(path, JSON.stringify(s, null, 2) + "\n");
 ' "$SETTINGS" || die "could not update $SETTINGS"
 
-# --- 6. desktop fonts (optional) ---------------------------------------------
+# --- 6. desktop extras (optional) --------------------------------------------
 
-# Claude Code draws a few symbols that FreeBSD's default fonts lack; desktop
-# terminals then show empty boxes. Each package covers some of them:
+# Fonts: Claude Code draws a few symbols that FreeBSD's default fonts lack;
+# desktop terminals then show empty boxes. Each package covers some of them:
 #   noto-sans-symbols   U+23BF  the connector under each tool call
 #   noto-sans-symbols2  U+23F5, U+23F8, U+23FA  mode indicators, bullet
-# Text consoles and remote sessions do not need them, so ask first.
 # Only scalable fonts count: VTE-based terminals (xfce4-terminal, GNOME
 # Terminal) ignore bitmap fonts such as Misc Fixed.
+# Clipboard: Claude Code pastes images (Ctrl+V) by running xclip on X11 or
+# wl-paste on Wayland; Linux builds use the same commands, so ours does too.
+# Text consoles and remote sessions need neither, so ask first.
 has_glyph() {
 	[ -n "$(fc-list ":charset=$1:scalable=true" family 2>/dev/null)" ]
 }
@@ -278,16 +280,26 @@ if [ -t 0 ]; then
 		else
 			fonts=" noto-sans-symbols noto-sans-symbols2"
 		fi
-		if [ -n "$fonts" ]; then
-			echo "Installing fonts for Claude Code's symbols:$fonts"
+		clip=""
+		if [ -n "${WAYLAND_DISPLAY:-}" ]; then
+			have wl-paste || clip=" wl-clipboard"
+		else
+			have xclip || have wl-paste || clip=" xclip"
+		fi
+		if [ -n "$fonts$clip" ]; then
+			[ -n "$fonts" ] &&
+			    echo "Fonts for Claude Code's symbols:$fonts"
+			[ -n "$clip" ] &&
+			    echo "Clipboard tool for pasting images:$clip"
 			# shellcheck disable=SC2086
-			if as_root pkg install$fonts; then
-				echo "Restart your terminal to pick up the new fonts."
+			if as_root pkg install$fonts$clip; then
+				[ -z "$fonts" ] ||
+				    echo "Restart your terminal to pick up the new fonts."
 			else
-				echo "Warning: could not install:$fonts" >&2
+				echo "Warning: could not install:$fonts$clip" >&2
 			fi
 		else
-			echo "Your fonts already cover Claude Code's symbols."
+			echo "Your fonts and clipboard tools already cover Claude Code."
 		fi
 		;;
 	esac
