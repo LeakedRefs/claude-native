@@ -17,6 +17,19 @@ own user, not under doas or sudo. Any of the four packages that are missing
 are installed with `pkg install` through doas, sudo or su, which needs a
 terminal.
 
+At the end, the script asks whether you will use Claude Code in a terminal
+on a graphical desktop. If you answer yes, it installs the fonts below for
+any symbols your scalable fonts lack (desktop terminals show empty boxes
+for them otherwise):
+
+| Package | Symbols |
+|---|---|
+| `noto-sans-symbols` | `⎿` (U+23BF), the connector under each tool call |
+| `noto-sans-symbols2` | `⏵` `⏸` `⏺` (U+23F5, U+23F8, U+23FA), mode indicators and bullet |
+
+Restart the terminal afterwards. Text consoles and remote sessions do not
+need them.
+
 To update, run the script again. Claude Code's own updater is disabled
 (see below).
 

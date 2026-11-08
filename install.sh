@@ -250,6 +250,47 @@ mkdir -p "$(dirname "$SETTINGS")"
 	fs.writeFileSync(path, JSON.stringify(s, null, 2) + "\n");
 ' "$SETTINGS" || die "could not update $SETTINGS"
 
+# --- 6. desktop fonts (optional) ---------------------------------------------
+
+# Claude Code draws a few symbols that FreeBSD's default fonts lack; desktop
+# terminals then show empty boxes. Each package covers some of them:
+#   noto-sans-symbols   U+23BF  the connector under each tool call
+#   noto-sans-symbols2  U+23F5, U+23F8, U+23FA  mode indicators, bullet
+# Text consoles and remote sessions do not need them, so ask first.
+# Only scalable fonts count: VTE-based terminals (xfce4-terminal, GNOME
+# Terminal) ignore bitmap fonts such as Misc Fixed.
+has_glyph() {
+	[ -n "$(fc-list ":charset=$1:scalable=true" family 2>/dev/null)" ]
+}
+if [ -t 0 ]; then
+	echo ""
+	printf "Will you use Claude Code in a terminal on a graphical desktop? [y/N] "
+	read -r answer || answer=""
+	case "$answer" in
+	[Yy]*)
+		fonts=""
+		if command -v fc-list >/dev/null 2>&1; then
+			has_glyph 23bf || fonts="$fonts noto-sans-symbols"
+			has_glyph 23f5 && has_glyph 23f8 && has_glyph 23fa ||
+			    fonts="$fonts noto-sans-symbols2"
+		else
+			fonts=" noto-sans-symbols noto-sans-symbols2"
+		fi
+		if [ -n "$fonts" ]; then
+			echo "Installing fonts for Claude Code's symbols:$fonts"
+			# shellcheck disable=SC2086
+			if as_root pkg install$fonts; then
+				echo "Restart your terminal to pick up the new fonts."
+			else
+				echo "Warning: could not install:$fonts" >&2
+			fi
+		else
+			echo "Your fonts already cover Claude Code's symbols."
+		fi
+		;;
+	esac
+fi
+
 echo ""
 echo "Claude Code $version installed: $BIN_DIR/claude"
 case ":$PATH:" in
