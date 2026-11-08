@@ -35,6 +35,9 @@ To update, run the script again. Claude Code's own updater is disabled
 
 ## How it works
 
+[TECHNICAL.md](TECHNICAL.md) covers the design in depth, including how
+it compares to running the Linux build under the Linux compatibility layer.
+
 The official `claude` binary is a [Bun](https://bun.sh) single-file
 executable: the Bun runtime with Claude Code's JavaScript embedded in an
 ELF section (`.bun`). Bun publishes an official FreeBSD build, so the
@@ -113,6 +116,7 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 
 | Path | Purpose |
 |---|---|
+| `TECHNICAL.md` | design overview; native versus the Linux compatibility layer |
 | `install.sh` | the installer (POSIX sh, base tools only) |
 | `regraft.js` | moves the module graph onto FreeBSD Bun, adds `bun-ant/` |
 | `bun-ant/` | JavaScript replacement for `Bun.ant.CellSegmenter`; `rg`/`ugrep`/`bfs` dispatch |
