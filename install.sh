@@ -11,9 +11,9 @@
 #
 # Usage: sh install.sh [stable|latest|VERSION]
 #
-# Requires only the base system, plus ripgrep for Claude Code's search
-# tools; if ripgrep is missing the script installs it with pkg (asking for
-# root through doas, sudo or su). Re-run this script to update.
+# Requires the base system plus four packages Claude Code needs on FreeBSD:
+# ripgrep, ugrep, bfs and bash. Any that are missing are installed with pkg
+# (asking for root through doas, sudo or su). Re-run this script to update.
 
 set -eu
 
@@ -74,12 +74,20 @@ for tool in fetch sha256 unzip; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool not found"
 done
 [ -f "$REGRAFT" ] || die "regraft.js not found next to this script ($REGRAFT)"
-for f in cellsegmenter.js clusters.js fused-data.js; do
+for f in embedded-tools.js cellsegmenter.js clusters.js fused-data.js; do
 	[ -f "$BUN_ANT/$f" ] || die "bun-ant/$f not found next to this script"
 done
 
-# Claude Code's search tools need ripgrep. Installing it takes root, so go
-# through doas, sudo or su; pkg asks for confirmation itself.
+# Packages Claude Code needs on FreeBSD:
+#   ripgrep, ugrep, bfs -- Anthropic's runtime has rg, ugrep and bfs built in;
+#                          ours runs the system copies instead (see
+#                          bun-ant/embedded-tools.js)
+#   bash                 -- Claude Code runs commands in bash or zsh only
+# Installing takes root, so go through doas, sudo or su; pkg asks for
+# confirmation itself.
+have() {
+	command -v "$1" >/dev/null 2>&1 || [ -x "/usr/local/bin/$1" ]
+}
 as_root() {
 	if [ "$(id -u)" -eq 0 ]; then
 		"$@"
@@ -92,12 +100,20 @@ as_root() {
 		su root -c "$*"
 	fi
 }
-if ! command -v rg >/dev/null 2>&1; then
-	echo "Claude Code needs ripgrep; installing it with pkg..."
-	[ -t 0 ] || die "ripgrep is not installed and there is no terminal to" \
-	    "ask for root; run: pkg install ripgrep"
-	as_root pkg install ripgrep || die "could not install ripgrep"
-	command -v rg >/dev/null 2>&1 || die "ripgrep is still not on PATH"
+missing=""
+have rg || missing="$missing ripgrep"
+have ugrep || missing="$missing ugrep"
+have bfs || missing="$missing bfs"
+have bash || have zsh || missing="$missing bash"
+if [ -n "$missing" ]; then
+	echo "Claude Code needs:$missing; installing with pkg..."
+	[ -t 0 ] || die "missing packages and no terminal to ask for root;" \
+	    "run: pkg install$missing"
+	# shellcheck disable=SC2086
+	as_root pkg install$missing || die "could not install:$missing"
+	for tool in rg ugrep bfs; do
+		have "$tool" || die "$tool is still not on PATH after pkg install"
+	done
 fi
 
 WORK_DIR=$(mktemp -d -t claude-install)

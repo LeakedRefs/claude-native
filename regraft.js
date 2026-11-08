@@ -269,12 +269,14 @@ const addModule = (name, source) => {
 	graph.modules.push({ name: Buffer.from(name), contents: Buffer.from(source, "latin1"),
 	    encoding: ENC_LATIN1, loader: LOADER_JS, format: FORMAT_ESM, side: 0 });
 };
-for (const f of ["cellsegmenter.js", "clusters.js", "fused-data.js"])
+for (const f of ["embedded-tools.js", "cellsegmenter.js", "clusters.js", "fused-data.js"])
 	addModule(SHIM_ROOT + f, readFileSync(join(SHIM_DIR, f), "latin1"));
 addModule(SHIM_ROOT + "prelude.js", [
 	"// Added by claude-native/regraft.js: provide what Anthropic's runtime",
 	"// has natively, then start Claude Code.",
-	'import { CellSegmenter } from "./cellsegmenter.js";',
+	'import { runEmbeddedTool } from "./embedded-tools.js";',
+	"runEmbeddedTool();   // started as rg, ugrep or bfs: runs it and exits",
+	'const { CellSegmenter } = await import("./cellsegmenter.js");',
 	'if (typeof Bun.ant?.CellSegmenter !== "function")',
 	"\tBun.ant = Object.assign(Bun.ant ?? {}, { CellSegmenter });",
 	"await import(" + JSON.stringify(entryName.toString("latin1")) + ");",

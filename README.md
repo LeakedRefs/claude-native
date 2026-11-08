@@ -2,7 +2,7 @@
 
 Anthropic ships no FreeBSD build of Claude Code. This directory installs it
 as a native FreeBSD executable, with no Linux compatibility layer, using
-only the base system plus `ripgrep`.
+the base system plus four packages: `ripgrep`, `ugrep`, `bfs` and `bash`.
 
 ## Install
 
@@ -13,8 +13,9 @@ sh install.sh 2.1.302    # a specific version
 ```
 
 `install.sh`, `regraft.js` and `bun-ant/` must sit in the same directory. Run as your
-own user, not under doas or sudo. If `ripgrep` is missing, the script runs
-`pkg install ripgrep` through doas, sudo or su, which needs a terminal.
+own user, not under doas or sudo. Any of the four packages that are missing
+are installed with `pkg install` through doas, sudo or su, which needs a
+terminal.
 
 To update, run the script again. Claude Code's own updater is disabled
 (see below).
@@ -53,6 +54,18 @@ to match the native class exactly; [CELLSEGMENTER.md](CELLSEGMENTER.md) has
 how it works and how it was verified. A small prelude installs it before
 Claude Code starts.
 
+The prelude also stands in for three tools compiled into Anthropic's
+runtime: when the binary is started as `rg`, `ugrep` or `bfs`, it runs the
+system's copy instead (`bun-ant/embedded-tools.js`). Claude Code depends on
+this. It spawns itself as `rg` for its search tools, and its Bash tool
+shadows `grep` and `find` with shell functions that run the binary as
+`ugrep` and `bfs`. The packages:
+
+| Package | Why |
+|---|---|
+| `ripgrep`, `ugrep`, `bfs` | stand-ins for the tools built into Anthropic's runtime |
+| `bash` | Claude Code runs commands only in bash or zsh, never csh or sh |
+
 The graph format follows Bun v1.4.4,
 `src/standalone_graph/StandaloneModuleGraph.rs` and
 `src/exe_format/elf.rs`. A future Bun release that changes the format will
@@ -72,7 +85,7 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 
 | Variable | Why |
 |---|---|
-| `USE_BUILTIN_RIPGREP=0` | Anthropic's runtime has ripgrep built in; stock Bun does not, so use the system `rg` |
+| `USE_BUILTIN_RIPGREP=0` | use the system `rg` directly instead of spawning the binary as `rg` |
 | `DISABLE_UPDATES=1` | Claude Code's updater (and `claude update`) would install the Linux build |
 
 ## Known gaps
@@ -89,7 +102,7 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 |---|---|
 | `install.sh` | the installer (POSIX sh, base tools only) |
 | `regraft.js` | moves the module graph onto FreeBSD Bun, adds `bun-ant/` |
-| `bun-ant/` | JavaScript replacement for `Bun.ant.CellSegmenter` |
+| `bun-ant/` | JavaScript replacement for `Bun.ant.CellSegmenter`; `rg`/`ugrep`/`bfs` dispatch |
 | `tools/gen-fused-data.py` | regenerates `bun-ant/fused-data.js` from Bun's tables |
 | `tools/oracle.py` | grafts test JavaScript onto Anthropic's Linux runtime |
 | `tools/cellseg-fuzz.js` | differential test against the native class (Linux) |
