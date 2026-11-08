@@ -5,12 +5,15 @@
 // <source-exe>   a Bun v1.4.x ELF standalone executable (e.g. Linux claude)
 // <template-exe> any `bun build --compile` output for the target platform,
 //                built by the same Bun version
-// <output-exe>   template runtime + source module graph, without bytecode
+// <output-exe>   template runtime + source module graph, without bytecode,
+//                plus the bun-ant/ modules (next to this file) and a prelude
+//                entry point that installs them before the original entry
 //
 // Format: Bun v1.4.4 src/standalone_graph/StandaloneModuleGraph.rs and
 // src/exe_format/elf.rs.  All integers are little-endian.
 
 import { readFileSync, writeFileSync, chmodSync } from "fs";
+import { join } from "path";
 
 const TRAILER = Buffer.from("\n---- Bun! ----\n");
 const OFFSETS_SIZE = 32;        // u64 byte_count, SP modules, u32 entry, SP argv, u32 flags
@@ -253,12 +256,36 @@ const NAPI = 10;
 const dropped = graph.modules.filter((m) => m.loader === NAPI);
 const entryName = graph.modules[graph.entry].name;
 graph.modules = graph.modules.filter((m) => m.loader !== NAPI);
-graph.entry = graph.modules.findIndex((m) => m.name.equals(entryName));
+
+// Anthropic's runtime has native pieces stock Bun lacks (Bun.ant). Add our
+// JavaScript replacements, and a prelude that installs them before loading
+// Claude Code's own entry point.
+const LOADER_JS = 1, FORMAT_ESM = 1, ENC_LATIN1 = 1;
+const SHIM_DIR = join(import.meta.dir, "bun-ant");
+const SHIM_ROOT = "/$bunfs/root/freebsd/";
+const addModule = (name, source) => {
+	if (!/^[\x00-\x7f]*$/.test(source))
+		die(name + ": embedded modules must be ASCII");
+	graph.modules.push({ name: Buffer.from(name), contents: Buffer.from(source, "latin1"),
+	    encoding: ENC_LATIN1, loader: LOADER_JS, format: FORMAT_ESM, side: 0 });
+};
+for (const f of ["cellsegmenter.js", "clusters.js", "fused-data.js"])
+	addModule(SHIM_ROOT + f, readFileSync(join(SHIM_DIR, f), "latin1"));
+addModule(SHIM_ROOT + "prelude.js", [
+	"// Added by claude-native/regraft.js: provide what Anthropic's runtime",
+	"// has natively, then start Claude Code.",
+	'import { CellSegmenter } from "./cellsegmenter.js";',
+	'if (typeof Bun.ant?.CellSegmenter !== "function")',
+	"\tBun.ant = Object.assign(Bun.ant ?? {}, { CellSegmenter });",
+	"await import(" + JSON.stringify(entryName.toString("latin1")) + ");",
+	"",
+].join("\n"));
+graph.entry = graph.modules.length - 1;
 
 const payload = writeGraph(graph);
 writeFileSync(dst, replacePayload(tpl, payload));
 chmodSync(dst, 0o755);
-console.log("regraft: %d modules (%d native addons dropped: %s), graph %d bytes",
+console.log("regraft: %d modules (%d native addons dropped: %s; Bun.ant shim added), graph %d bytes",
     graph.modules.length, dropped.length,
     dropped.map((m) => m.name.toString().replace("/$bunfs/root/", "")).join(", "),
     payload.length);

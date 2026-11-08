@@ -6,6 +6,8 @@
 # Linux build, verifies it, and moves its JavaScript onto the official
 # FreeBSD build of the same Bun runtime (see regraft.js). The result is a
 # native FreeBSD executable: no Linux compatibility layer is involved.
+# Pieces of Anthropic's runtime that stock Bun lacks (Bun.ant) are supplied
+# in JavaScript from bun-ant/.
 #
 # Usage: sh install.sh [stable|latest|VERSION]
 #
@@ -30,6 +32,7 @@ BUN_BASE_URL="https://github.com/oven-sh/bun/releases/download"
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REGRAFT="$SCRIPT_DIR/regraft.js"
+BUN_ANT="$SCRIPT_DIR/bun-ant"
 SHARE_DIR="$HOME/.local/share/claude"
 VERSIONS_DIR="$SHARE_DIR/versions"
 NATIVE_DIR="$SHARE_DIR/freebsd"
@@ -71,6 +74,9 @@ for tool in fetch sha256 unzip; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool not found"
 done
 [ -f "$REGRAFT" ] || die "regraft.js not found next to this script ($REGRAFT)"
+for f in cellsegmenter.js clusters.js fused-data.js; do
+	[ -f "$BUN_ANT/$f" ] || die "bun-ant/$f not found next to this script"
+done
 
 # Claude Code's search tools need ripgrep. Installing it takes root, so go
 # through doas, sudo or su; pkg asks for confirmation itself.
@@ -208,8 +214,10 @@ mv "$native_bin" "$VERSIONS_DIR/$version.tmp"
 mv "$VERSIONS_DIR/$version.tmp" "$VERSIONS_DIR/$version"
 ln -sfn "$VERSIONS_DIR/$version" "$BIN_DIR/claude"
 
-# Keep regraft.js with the runtime so a later update need not find the repo.
+# Keep the converter with the runtime so a later update need not find the repo.
 cp "$REGRAFT" "$NATIVE_DIR/regraft.js"
+mkdir -p "$NATIVE_DIR/bun-ant"
+cp "$BUN_ANT"/*.js "$NATIVE_DIR/bun-ant/"
 
 # --- 5. settings -------------------------------------------------------------
 
