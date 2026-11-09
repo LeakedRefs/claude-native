@@ -346,8 +346,11 @@ principle, not tested behavior.
   for each new Claude Code release.
 - **amd64 only.** Bun publishes FreeBSD builds for x64; other
   architectures depend on Bun.
-- **Disk use.** Converted binaries are about 170 MB each, and old versions
-  are not yet pruned.
+- **Disk use.** Converted binaries are about 170 MB each. Each install
+  keeps the active version and the newest other one, for rolling back, and
+  removes the rest. A version that a running `claude` uses (checked with
+  `fuser`) is kept, because Claude Code runs its own binary again as
+  `ugrep` and `bfs`.
 
 ## Files
 

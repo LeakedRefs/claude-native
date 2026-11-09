@@ -9,9 +9,9 @@ the base system plus four packages: `ripgrep`, `ugrep`, `bfs` and `bash`.
 From the release tarball (see [README.install](README.install)):
 
 ```sh
-mkdir -p ~/.claude
-tar -xzf FreeBSD-claude-native.tar.gz -C ~/.claude
-sh ~/.claude/FreeBSD-claude-native/install.sh
+tar -xzf FreeBSD-claude-native.tar.gz -C /tmp
+sh /tmp/FreeBSD-claude-native/install.sh
+rm -rf /tmp/FreeBSD-claude-native     # the installer keeps its own copy
 ```
 
 From a checkout of this directory:
@@ -107,12 +107,28 @@ The graph format follows Bun v1.4.4,
 `src/exe_format/elf.rs`. A future Bun release that changes the format will
 make `regraft.js` stop with an error rather than produce a broken binary.
 
+## Rolling back
+
+Each install or update keeps two versions (about 170 MB each): the active
+one and the newest other one. Older versions are removed, except any that a
+running `claude` is still using. To switch back:
+
+```sh
+ls ~/.local/share/claude/versions
+ln -sfn ~/.local/share/claude/versions/<version> ~/.local/bin/claude
+```
+
+The background updater moves forward again at its next check (within 8
+hours) if your channel has a newer version. Versions cannot be pinned yet;
+to stop automatic updates, remove the `install.sh --background` entry from
+`hooks.SessionStart` in `~/.claude/settings.json`.
+
 ## Files installed
 
 | Path | Contents |
 |---|---|
 | `~/.local/bin/claude` | symlink to the active version |
-| `~/.local/share/claude/versions/<version>` | converted binaries |
+| `~/.local/share/claude/versions/<version>` | converted binaries: the active one and the newest other, for rolling back |
 | `~/.local/share/claude/freebsd/bun-<v>/` | cached FreeBSD Bun and template |
 | `~/.local/share/claude/freebsd/install.sh` | copy of the installer, run for updates |
 | `~/.local/share/claude/freebsd/regraft.js` | copy of the converter |
@@ -132,7 +148,6 @@ Added to `~/.claude/settings.json` (other settings and hooks are kept):
 
 - Voice input does not work (Linux-only native addon).
 - amd64 only so far.
-- Old versions are not pruned from `versions/` (about 170 MB each).
 - Right-to-left text is not reordered in Windows Terminal and VS Code
   terminals (see CELLSEGMENTER.md).
 

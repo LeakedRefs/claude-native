@@ -365,6 +365,36 @@ mv "$native_bin" "$VERSIONS_DIR/$version.tmp"
 mv "$VERSIONS_DIR/$version.tmp" "$VERSIONS_DIR/$version"
 ln -sfn "$VERSIONS_DIR/$version" "$BIN_DIR/claude"
 
+# Prune: keep the active version and the newest other one, for rolling back
+# (about 170 MB each). A version a running claude uses is kept too: Claude
+# Code starts its own binary again to run ugrep and bfs, so deleting it
+# would break grep and find in that session. If fuser fails, keep the file.
+in_use() {
+	users=$(fuser "$1" 2>/dev/null) || return 0
+	[ -n "$(echo $users)" ]
+}
+fallback=$(for f in "$VERSIONS_DIR"/*; do
+	n=${f##*/}
+	case "$n" in *[!0-9.]*|"$version") continue ;; esac
+	echo "$n"
+done | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+pruned=""
+for f in "$VERSIONS_DIR"/*; do
+	[ -f "$f" ] || continue
+	n=${f##*/}
+	case "$n" in
+	"$version"|"$fallback") continue ;;
+	[0-9]*.[0-9]*.[0-9]*) ;;    # a version, or a .tmp left by an interrupted install
+	*) continue ;;
+	esac
+	if in_use "$f"; then
+		echo "Keeping $n: a running claude is using it."
+		continue
+	fi
+	rm -f "$f" && pruned="$pruned $n"
+done
+[ -z "$pruned" ] || echo "Removed old versions:$pruned"
+
 # Keep the installer and converter with the runtime, for background updates.
 install_file "$SELF" "$NATIVE_DIR/install.sh"
 install_file "$REGRAFT" "$NATIVE_DIR/regraft.js"

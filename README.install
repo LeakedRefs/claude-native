@@ -13,14 +13,17 @@ Install
 
 Run these as your own user, not as root:
 
-    mkdir -p ~/.claude
-    tar -xzf FreeBSD-claude-native.tar.gz -C ~/.claude
-    sh ~/.claude/FreeBSD-claude-native/install.sh
+    tar -xzf FreeBSD-claude-native.tar.gz -C /tmp
+    sh /tmp/FreeBSD-claude-native/install.sh
+    rm -rf /tmp/FreeBSD-claude-native
+
+The installer keeps everything it needs under ~/.local/share/claude/, so
+the extracted files can be deleted afterward, as above.
 
 By default the latest release is installed. To choose one:
 
-    sh ~/.claude/FreeBSD-claude-native/install.sh stable     # stable channel
-    sh ~/.claude/FreeBSD-claude-native/install.sh 2.1.319    # a specific version
+    sh /tmp/FreeBSD-claude-native/install.sh stable     # stable channel
+    sh /tmp/FreeBSD-claude-native/install.sh 2.1.319    # a specific version
 
 Claude Code needs four packages: ripgrep, ugrep, bfs and bash. Any that are
 missing are installed with pkg, through doas, sudo or su, so run the
@@ -47,14 +50,13 @@ updated, or that the update failed; the details are in
 ~/.local/share/claude/freebsd/update.log. A failed update leaves the
 installed version in place.
 
-The installer keeps a copy of itself for this, so once installed you can
-delete ~/.claude/FreeBSD-claude-native. To update right away:
+These updates use the installer's own copy. To update right away:
 
     sh ~/.local/share/claude/freebsd/install.sh
 
 Claude Code's own updater stays turned off, because it would install the
 Linux build. To install a new release of this tarball, extract it and run
-its install.sh as above.
+its install.sh as above; that also refreshes the installer's copy.
 
 
 Contents
