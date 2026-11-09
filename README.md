@@ -41,8 +41,14 @@ Without the fonts, desktop terminals show empty boxes for those symbols;
 restart the terminal after installing them. Text consoles and remote
 sessions need none of these (Claude Code does not paste images over SSH).
 
-To update, run the script again. Claude Code's own updater is disabled
-(see below).
+Updates are automatic. When `claude` starts, a `SessionStart` hook checks
+(at most every 8 hours) for a newer version of the release channel in
+Claude Code's `autoUpdatesChannel` setting (`latest` by default, or
+`stable`), and converts and installs it in the background. The next session
+shows whether it worked; `~/.local/share/claude/freebsd/update.log` has the
+details, and a failed update leaves the installed version alone. To update
+right away, run `sh ~/.local/share/claude/freebsd/install.sh`. Claude
+Code's own updater stays disabled (see below).
 
 ## How it works
 
@@ -108,15 +114,19 @@ make `regraft.js` stop with an error rather than produce a broken binary.
 | `~/.local/bin/claude` | symlink to the active version |
 | `~/.local/share/claude/versions/<version>` | converted binaries |
 | `~/.local/share/claude/freebsd/bun-<v>/` | cached FreeBSD Bun and template |
+| `~/.local/share/claude/freebsd/install.sh` | copy of the installer, run for updates |
 | `~/.local/share/claude/freebsd/regraft.js` | copy of the converter |
 | `~/.local/share/claude/freebsd/bun-ant/` | copy of the Bun.ant replacement |
+| `~/.local/share/claude/freebsd/update.log` | background update log (last 500 lines) |
+| `~/.local/share/claude/freebsd/update-checked` | time of the last update check |
 
-Settings added to the `env` block of `~/.claude/settings.json`:
+Added to `~/.claude/settings.json` (other settings and hooks are kept):
 
-| Variable | Why |
+| Setting | Why |
 |---|---|
-| `USE_BUILTIN_RIPGREP=0` | use the system `rg` directly instead of spawning the binary as `rg` |
-| `DISABLE_UPDATES=1` | Claude Code's updater (and `claude update`) would install the Linux build |
+| `env.USE_BUILTIN_RIPGREP=0` | use the system `rg` directly instead of spawning the binary as `rg` |
+| `env.DISABLE_UPDATES=1` | Claude Code's updater (and `claude update`) would install the Linux build |
+| `hooks.SessionStart`: `install.sh --background` | background updates |
 
 ## Known gaps
 

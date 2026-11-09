@@ -166,14 +166,42 @@ pastes images in an xfce terminal on FreeBSD 15.1. `install.sh` offers
 ### Settings
 
 `install.sh` adds two variables to the `env` block of
-`~/.claude/settings.json`:
+`~/.claude/settings.json`, and a hook:
 
-| Variable | Why |
+| Setting | Why |
 |---|---|
-| `USE_BUILTIN_RIPGREP=0` | use the system `rg` directly instead of spawning the binary as `rg` |
-| `DISABLE_UPDATES=1` | Claude Code's updater would replace the binary with the Linux build |
+| `env.USE_BUILTIN_RIPGREP=0` | use the system `rg` directly instead of spawning the binary as `rg` |
+| `env.DISABLE_UPDATES=1` | Claude Code's updater would replace the binary with the Linux build |
+| `hooks.SessionStart` | background updates (below) |
 
-Updating means running `install.sh` again.
+### Background updates
+
+Claude Code's own updater downloads the Linux build, so it stays off.
+`install.sh` takes its place, the same way: check when Claude starts,
+install in the background, use the new version on the next launch.
+
+- **Self-contained.** The installer copies itself, `regraft.js` and
+  `bun-ant/` to `~/.local/share/claude/freebsd/`, so updates never need
+  the extracted tarball. Copies are made by rename, because `sh` reads a
+  script while running it and must not see it rewritten.
+- **Trigger.** A `SessionStart` hook runs
+  `sh ~/.local/share/claude/freebsd/install.sh --background`. That
+  returns at once: if the last check was under 8 hours ago it does nothing,
+  otherwise it starts `install.sh --update` detached with `daemon(8)`.
+- **Check.** `--update` fetches only the version string of the release
+  channel (Claude Code's `autoUpdatesChannel`: `latest` by default, or
+  `stable`) and compares it with the version `~/.local/bin/claude` points
+  to. It installs only a *newer* version, so switching to `stable` never
+  downgrades.
+- **Install.** A normal `install.sh <version>` run: download, verify,
+  convert, check `--version`, switch the symlink. A session already
+  running keeps its binary, because the new one is a new file. One install
+  runs at a time: a lock holding the owner's pid, which is taken over when
+  that process is gone. A second installer exits with status 75.
+- **Report.** The result goes to `update.log`, and a one-line notice to
+  `update-notice`. The next `--background` run prints the notice as hook
+  JSON (`{"systemMessage": ...}`), which Claude Code shows in its UI, then
+  deletes it. A failed update leaves the installed version in place.
 
 ## Verification
 
@@ -283,7 +311,7 @@ several things the native build gives up:
 | Right-to-left reordering in Windows Terminal / VS Code terminals | not implemented | native |
 | Image paste | works, via `xclip` / `wl-paste` | works, via the same commands |
 | Voice input | unavailable (Linux addon dropped) | depends on Linux libraries for the addon |
-| Updates | rerun `install.sh` | Claude Code's own updater |
+| Updates | automatic, in the background (`SessionStart` hook) | Claude Code's own updater |
 
 These are documented in the known gaps of [README.md](README.md) and
 [CELLSEGMENTER.md](CELLSEGMENTER.md). Startup time has not been measured

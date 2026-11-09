@@ -15,14 +15,23 @@
 #
 # Requires the base system plus four packages Claude Code needs on FreeBSD:
 # ripgrep, ugrep, bfs and bash. Any that are missing are installed with pkg
-# (asking for root through doas, sudo or su). Re-run this script to update.
+# (asking for root through doas, sudo or su).
+#
+# Updates: Claude Code's own updater would install the Linux build, so it is
+# turned off. Instead this script installs a copy of itself next to the
+# runtime and adds a SessionStart hook that runs that copy with --background
+# each time claude starts. At most every 8 hours, that starts a detached
+# --update run, which installs the newest version of your release channel
+# if it is newer than the one installed. The next session shows the result.
 
 set -eu
 
-TARGET="${1:-latest}"
-case "$TARGET" in
-stable|latest) ;;
-[0-9]*.[0-9]*.[0-9]*) ;;
+MODE=install
+TARGET=latest
+case "${1:-}" in
+--background) MODE=background ;;
+--update) MODE=update ;;
+""|stable|latest|[0-9]*.[0-9]*.[0-9]*) TARGET="${1:-latest}" ;;
 *)
 	echo "Usage: $0 [stable|latest|VERSION]" >&2
 	exit 1
@@ -33,6 +42,7 @@ CLAUDE_BASE_URL="https://downloads.claude.ai/claude-code-releases"
 BUN_BASE_URL="https://github.com/oven-sh/bun/releases/download"
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SELF="$SCRIPT_DIR/$(basename "$0")"
 REGRAFT="$SCRIPT_DIR/regraft.js"
 BUN_ANT="$SCRIPT_DIR/bun-ant"
 SHARE_DIR="$HOME/.local/share/claude"
@@ -40,7 +50,13 @@ VERSIONS_DIR="$SHARE_DIR/versions"
 NATIVE_DIR="$SHARE_DIR/freebsd"
 BIN_DIR="$HOME/.local/bin"
 SETTINGS="$HOME/.claude/settings.json"
+LOCK_DIR="$NATIVE_DIR/update.lock"
+UPDATE_LOG="$NATIVE_DIR/update.log"
+UPDATE_NOTICE="$NATIVE_DIR/update-notice"
+UPDATE_STAMP="$NATIVE_DIR/update-checked"
+CHECK_MINUTES=480
 WORK_DIR=""
+LOCKED=""
 
 die() {
 	echo "Error: $*" >&2
@@ -49,8 +65,105 @@ die() {
 
 cleanup() {
 	[ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR"
+	[ -n "$LOCKED" ] && rm -rf "$LOCK_DIR"
+	return 0
 }
 trap cleanup EXIT INT TERM
+
+# --- background updates ------------------------------------------------------
+
+# True if version $1 is newer than version $2 (or $2 is empty).
+newer() {
+	[ "$1" != "$2" ] || return 1
+	[ -n "$2" ] || return 0
+	[ "$(printf '%s\n%s\n' "$1" "$2" |
+	    sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)" = "$1" ]
+}
+
+# --background: run by the SessionStart hook. It must return at once and
+# print nothing but hook JSON, which Claude Code shows to the user.
+if [ "$MODE" = background ]; then
+	if [ -s "$UPDATE_NOTICE" ]; then
+		msg=$(tr -d '"\\' < "$UPDATE_NOTICE")
+		rm -f "$UPDATE_NOTICE"
+		printf '{"systemMessage": "%s"}\n' "$msg"
+	fi
+	[ -d "$NATIVE_DIR" ] || exit 0
+	[ -z "$(find "$UPDATE_STAMP" -mmin "-$CHECK_MINUTES" 2>/dev/null)" ] || exit 0
+	touch "$UPDATE_STAMP"
+	/usr/sbin/daemon -f /bin/sh "$SELF" --update
+	exit 0
+fi
+
+# --update: the detached check. Installs only a newer version of the
+# release channel set in Claude Code's autoUpdatesChannel (default latest).
+if [ "$MODE" = update ]; then
+	mkdir -p "$NATIVE_DIR"
+	if [ -f "$UPDATE_LOG" ]; then
+		tail -n 500 "$UPDATE_LOG" > "$UPDATE_LOG.tmp" &&
+		    mv -f "$UPDATE_LOG.tmp" "$UPDATE_LOG"
+	fi
+	exec >> "$UPDATE_LOG" 2>&1 < /dev/null
+	echo "--- $(date '+%Y-%m-%d %H:%M:%S') checking for updates"
+	channel=$(sed -n 's/.*"autoUpdatesChannel"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' \
+	    "$SETTINGS" 2>/dev/null | head -n 1)
+	[ "$channel" = stable ] || channel=latest
+	current=$(readlink "$BIN_DIR/claude" 2>/dev/null) || current=""
+	current=${current##*/}
+	available=$(fetch -q -o - "$CLAUDE_BASE_URL/$channel" 2>/dev/null) || available=""
+	case "$available" in
+	[0-9]*.[0-9]*.[0-9]*) ;;
+	*)
+		echo "could not get the $channel version; will try again later"
+		exit 0
+		;;
+	esac
+	if ! newer "$available" "$current"; then
+		echo "up to date: $current ($channel is $available)"
+		exit 0
+	fi
+	echo "updating ${current:-nothing} to $available ($channel)"
+	rc=0
+	/bin/sh "$SELF" "$available" || rc=$?
+	case $rc in
+	0)
+		echo "Claude Code updated to $available. Restart claude to use it." \
+		    > "$UPDATE_NOTICE"
+		;;
+	75)
+		echo "another install or update is running; skipped"
+		;;
+	*)
+		echo "Background update to Claude Code $available failed; see $UPDATE_LOG" \
+		    > "$UPDATE_NOTICE"
+		;;
+	esac
+	exit 0
+fi
+
+# One install or update at a time. The lock holds the owner's pid; a lock
+# whose owner is gone is taken over (an empty one only once it is old).
+take_lock() {
+	mkdir -p "$NATIVE_DIR"
+	if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+		pid=$(cat "$LOCK_DIR/pid" 2>/dev/null) || pid=""
+		if [ -n "$pid" ]; then
+			! kill -0 "$pid" 2>/dev/null || return 1
+		else
+			[ -n "$(find "$LOCK_DIR" -maxdepth 0 -mmin +60)" ] || return 1
+		fi
+		rm -rf "$LOCK_DIR"
+		mkdir "$LOCK_DIR" 2>/dev/null || return 1
+	fi
+	LOCKED=1
+	echo $$ > "$LOCK_DIR/pid"
+}
+
+# Copy by rename, so a copy of this script that is running is never
+# rewritten under it.
+install_file() {
+	cp "$1" "$2.tmp" && mv -f "$2.tmp" "$2"
+}
 
 # --- preflight ---------------------------------------------------------------
 
@@ -116,6 +229,11 @@ if [ -n "$missing" ]; then
 	for tool in rg ugrep bfs; do
 		have "$tool" || die "$tool is still not on PATH after pkg install"
 	done
+fi
+
+if ! take_lock; then
+	echo "Another Claude Code install or update is running; try again later." >&2
+	exit 75
 fi
 
 WORK_DIR=$(mktemp -d -t claude-install)
@@ -232,25 +350,37 @@ mv "$native_bin" "$VERSIONS_DIR/$version.tmp"
 mv "$VERSIONS_DIR/$version.tmp" "$VERSIONS_DIR/$version"
 ln -sfn "$VERSIONS_DIR/$version" "$BIN_DIR/claude"
 
-# Keep the converter with the runtime so a later update need not find the repo.
-cp "$REGRAFT" "$NATIVE_DIR/regraft.js"
+# Keep the installer and converter with the runtime, for background updates.
+install_file "$SELF" "$NATIVE_DIR/install.sh"
+install_file "$REGRAFT" "$NATIVE_DIR/regraft.js"
 mkdir -p "$NATIVE_DIR/bun-ant"
-cp "$BUN_ANT"/*.js "$NATIVE_DIR/bun-ant/"
+for f in "$BUN_ANT"/*.js; do
+	install_file "$f" "$NATIVE_DIR/bun-ant/${f##*/}"
+done
 
 # --- 5. settings -------------------------------------------------------------
 
 # USE_BUILTIN_RIPGREP=0: use the system rg; ours has no built-in ripgrep.
 # DISABLE_UPDATES=1: Claude Code's own updater would fetch the Linux build.
+# SessionStart hook: background updates (see the top of this file). Added
+# once; other hooks are left alone.
 mkdir -p "$(dirname "$SETTINGS")"
 "$bun" -e '
 	const fs = require("fs");
-	const path = process.argv[1];
+	const [path, command] = process.argv.slice(1);
 	let s = {};
 	if (fs.existsSync(path))
 		s = JSON.parse(fs.readFileSync(path, "utf8"));
 	s.env = { ...s.env, USE_BUILTIN_RIPGREP: "0", DISABLE_UPDATES: "1" };
+	s.hooks ??= {};
+	s.hooks.SessionStart ??= [];
+	const ours = (h) => typeof h.command === "string" &&
+	    h.command.includes("/freebsd/install.sh") && h.command.includes("--background");
+	if (!s.hooks.SessionStart.some((g) => (g.hooks ?? []).some(ours)))
+		s.hooks.SessionStart.push({ hooks: [{ type: "command", command }] });
 	fs.writeFileSync(path, JSON.stringify(s, null, 2) + "\n");
-' "$SETTINGS" || die "could not update $SETTINGS"
+' "$SETTINGS" "/bin/sh '$NATIVE_DIR/install.sh' --background" ||
+    die "could not update $SETTINGS"
 
 # --- 6. desktop extras (optional) --------------------------------------------
 
@@ -317,4 +447,5 @@ case ":$PATH:" in
 	;;
 esac
 echo ""
-echo "To update later, run this script again."
+echo "Updates install in the background when you start claude (checked at"
+echo "most every 8 hours). To update now: sh $NATIVE_DIR/install.sh"

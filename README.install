@@ -39,12 +39,22 @@ on your PATH, the installer shows how to add it.
 Update
 ------
 
-Claude Code's built-in updater is turned off, because it would install the
-Linux build. To update, run the installer again:
+Updates install themselves. Each time you start claude (at most every 8
+hours), a background check looks for a newer version of your release
+channel (Claude Code's autoUpdatesChannel setting: latest, the default, or
+stable) and converts and installs it. Your next session says it was
+updated, or that the update failed; the details are in
+~/.local/share/claude/freebsd/update.log. A failed update leaves the
+installed version in place.
 
-    sh ~/.claude/FreeBSD-claude-native/install.sh
+The installer keeps a copy of itself for this, so once installed you can
+delete ~/.claude/FreeBSD-claude-native. To update right away:
 
-Keep ~/.claude/FreeBSD-claude-native for this.
+    sh ~/.local/share/claude/freebsd/install.sh
+
+Claude Code's own updater stays turned off, because it would install the
+Linux build. To install a new release of this tarball, extract it and run
+its install.sh as above.
 
 
 Contents
