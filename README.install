@@ -36,7 +36,8 @@ noto-sans-symbols2) and a clipboard tool for pasting images (xclip, or
 wl-clipboard on Wayland).
 
 Claude Code is installed to ~/.local/bin/claude. If that directory is not
-on your PATH, the installer shows how to add it.
+on your PATH, the installer shows how to add it. Its files go in
+~/.local/share/claude/, or $XDG_DATA_HOME/claude/ if you set XDG_DATA_HOME.
 
 
 Update

@@ -136,6 +136,10 @@ to stop automatic updates, remove the `install.sh --background` entry from
 | `~/.local/share/claude/freebsd/update.log` | background update log (last 500 lines) |
 | `~/.local/share/claude/freebsd/update-checked` | time of the last update check |
 
+If `XDG_DATA_HOME` is set, `$XDG_DATA_HOME/claude` takes the place of
+`~/.local/share/claude`, matching where Claude Code looks for its native
+install. `~/.local/bin` is used either way.
+
 Added to `~/.claude/settings.json` (other settings and hooks are kept):
 
 | Setting | Why |

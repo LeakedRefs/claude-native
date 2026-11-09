@@ -45,7 +45,9 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 SELF="$SCRIPT_DIR/$(basename "$0")"
 REGRAFT="$SCRIPT_DIR/regraft.js"
 BUN_ANT="$SCRIPT_DIR/bun-ant"
-SHARE_DIR="$HOME/.local/share/claude"
+# Where Claude Code looks for its native install: $XDG_DATA_HOME/claude
+# (default ~/.local/share/claude), with the launcher in ~/.local/bin.
+SHARE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/claude"
 VERSIONS_DIR="$SHARE_DIR/versions"
 NATIVE_DIR="$SHARE_DIR/freebsd"
 BIN_DIR="$HOME/.local/bin"
@@ -57,6 +59,7 @@ UPDATE_STAMP="$NATIVE_DIR/update-checked"
 CHECK_MINUTES=480
 WORK_DIR=""
 LOCKED=""
+STEP_PID=""
 
 die() {
 	echo "Error: $*" >&2
@@ -64,11 +67,21 @@ die() {
 }
 
 cleanup() {
+	# A step runs in the background, where Ctrl+C is ignored; stop it, and
+	# the commands it started (zstd, head, bun), with us.
+	# Under set -e a failing command would end cleanup early, so ignore
+	# the status: there may be no children (sh can exec the last command).
+	if [ -n "$STEP_PID" ]; then
+		pkill -P "$STEP_PID" 2>/dev/null || :
+		kill "$STEP_PID" 2>/dev/null || :
+	fi
 	[ -n "$WORK_DIR" ] && rm -rf "$WORK_DIR"
 	[ -n "$LOCKED" ] && rm -rf "$LOCK_DIR"
 	return 0
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- background updates ------------------------------------------------------
 
@@ -266,6 +279,43 @@ checksum_ok() {
 	[ "$(sha256 -q "$1")" = "$2" ]
 }
 
+# step LABEL [FILE BYTES] -- COMMAND...: run COMMAND. On a terminal, show
+# LABEL with how far FILE has grown toward BYTES, or with the seconds
+# elapsed, until COMMAND finishes.
+step() {
+	label=$1 file="" bytes=""
+	shift
+	if [ "$1" != -- ]; then
+		file=$1 bytes=$2
+		shift 2
+	fi
+	shift
+	if [ ! -t 2 ]; then
+		echo "$label"
+		"$@"
+		return
+	fi
+	start=$(date +%s)
+	"$@" &
+	STEP_PID=$!
+	while kill -0 "$STEP_PID" 2>/dev/null; do
+		secs=$(( $(date +%s) - start ))
+		if [ -n "$file" ] && [ -f "$file" ]; then
+			pct=$(( $(stat -f %z "$file") * 100 / bytes ))
+			[ "$pct" -le 100 ] || pct=100
+			printf '\r%s %3d%%  %ds ' "$label" "$pct" "$secs" >&2
+		else
+			printf '\r%s %ds ' "$label" "$secs" >&2
+		fi
+		sleep 1
+	done
+	rc=0
+	wait "$STEP_PID" || rc=$?
+	STEP_PID=""
+	printf '\r%s done (%ds)      \n' "$label" "$(( $(date +%s) - start ))" >&2
+	return $rc
+}
+
 # --- 1. download the official Linux build ------------------------------------
 
 case "$TARGET" in
@@ -293,6 +343,9 @@ esac
 
 linux_bin="$WORK_DIR/claude-linux"
 verified=false
+decompress() {
+	zstd -d -q -c "$linux_bin.zst" | head -c "$size" > "$linux_bin"
+}
 # The zstd-compressed download is about a third of the size; zstd is in base.
 if command -v zstd >/dev/null 2>&1; then
 	download "$CLAUDE_BASE_URL/$version/manifest.zst.json" "$WORK_DIR/manifest.zst.json"
@@ -301,7 +354,7 @@ if command -v zstd >/dev/null 2>&1; then
 		echo "Downloading Claude Code $version (compressed)..."
 		download_big "$CLAUDE_BASE_URL/$version/$linux_platform/claude.zst" "$linux_bin.zst"
 		if checksum_ok "$linux_bin.zst" "$zst_checksum"; then
-			zstd -d -q -c "$linux_bin.zst" | head -c "$size" > "$linux_bin"
+			step "Decompressing..." "$linux_bin" "$size" -- decompress
 			checksum_ok "$linux_bin" "$checksum" && verified=true
 		fi
 		rm -f "$linux_bin.zst"
@@ -349,9 +402,16 @@ fi
 # --- 3. convert -------------------------------------------------------------
 
 native_bin="$WORK_DIR/claude-freebsd"
-echo "Converting to a native FreeBSD binary..."
-"$bun" "$REGRAFT" "$linux_bin" "$template" "$native_bin" ||
-    die "conversion failed"
+# regraft.js prints one summary line; hold it until the progress line is done.
+convert() {
+	"$bun" "$REGRAFT" "$linux_bin" "$template" "$native_bin" \
+	    > "$WORK_DIR/regraft.out" 2>&1
+}
+step "Converting to a native FreeBSD binary..." -- convert || {
+	cat "$WORK_DIR/regraft.out" >&2
+	die "conversion failed"
+}
+cat "$WORK_DIR/regraft.out"
 rm -f "$linux_bin"
 
 reported=$("$native_bin" --version 2>/dev/null | cut -d' ' -f1)
