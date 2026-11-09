@@ -244,6 +244,17 @@ download() {
 	fetch -q -o "$2" "$1" || die "download failed: $1"
 }
 
+# A large download: on a terminal, fetch draws a progress meter labeled with
+# the file name; otherwise (background updates) it stays quiet.
+download_big() {
+	if [ -t 2 ]; then
+		(cd "$(dirname "$2")" && fetch -o "${2##*/}" "$1") ||
+		    die "download failed: $1"
+	else
+		download "$1" "$2"
+	fi
+}
+
 # Print the value of "$2" inside the "$1" object of a manifest on stdin.
 # The manifest is flat enough that the platform object has no nested braces.
 manifest_field() {
@@ -287,7 +298,8 @@ if command -v zstd >/dev/null 2>&1; then
 	download "$CLAUDE_BASE_URL/$version/manifest.zst.json" "$WORK_DIR/manifest.zst.json"
 	zst_checksum=$(manifest_field "$linux_platform" checksum < "$WORK_DIR/manifest.zst.json")
 	if [ ${#zst_checksum} -eq 64 ]; then
-		download "$CLAUDE_BASE_URL/$version/$linux_platform/claude.zst" "$linux_bin.zst"
+		echo "Downloading Claude Code $version (compressed)..."
+		download_big "$CLAUDE_BASE_URL/$version/$linux_platform/claude.zst" "$linux_bin.zst"
 		if checksum_ok "$linux_bin.zst" "$zst_checksum"; then
 			zstd -d -q -c "$linux_bin.zst" | head -c "$size" > "$linux_bin"
 			checksum_ok "$linux_bin" "$checksum" && verified=true
@@ -296,7 +308,8 @@ if command -v zstd >/dev/null 2>&1; then
 	fi
 fi
 if [ "$verified" = false ]; then
-	download "$CLAUDE_BASE_URL/$version/$linux_platform/claude" "$linux_bin"
+	echo "Downloading Claude Code $version..."
+	download_big "$CLAUDE_BASE_URL/$version/$linux_platform/claude" "$linux_bin"
 	checksum_ok "$linux_bin" "$checksum" || die "checksum verification failed"
 fi
 
@@ -312,7 +325,7 @@ bun="$bun_dir/bun"
 template="$bun_dir/template"
 if [ ! -x "$bun" ]; then
 	echo "Fetching Bun $bun_version for FreeBSD..."
-	download "$BUN_BASE_URL/bun-v$bun_version/$bun_platform.zip" "$WORK_DIR/bun.zip"
+	download_big "$BUN_BASE_URL/bun-v$bun_version/$bun_platform.zip" "$WORK_DIR/bun.zip"
 	download "$BUN_BASE_URL/bun-v$bun_version/SHASUMS256.txt" "$WORK_DIR/SHASUMS256.txt"
 	bun_checksum=$(awk -v f="$bun_platform.zip" '$2 == f { print $1 }' \
 	    "$WORK_DIR/SHASUMS256.txt")
@@ -327,6 +340,7 @@ fi
 
 # Any `bun build --compile` output carries the FreeBSD runtime we graft onto.
 if [ ! -x "$template" ]; then
+	echo "Building the FreeBSD Bun template..."
 	echo 'console.log("template");' > "$WORK_DIR/template.js"
 	"$bun" build --compile "$WORK_DIR/template.js" --outfile "$template" \
 	    >/dev/null || die "could not build the Bun template"
@@ -335,6 +349,7 @@ fi
 # --- 3. convert -------------------------------------------------------------
 
 native_bin="$WORK_DIR/claude-freebsd"
+echo "Converting to a native FreeBSD binary..."
 "$bun" "$REGRAFT" "$linux_bin" "$template" "$native_bin" ||
     die "conversion failed"
 rm -f "$linux_bin"
