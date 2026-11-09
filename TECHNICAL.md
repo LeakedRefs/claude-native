@@ -263,14 +263,29 @@ jail needs no Linux ABI setup to run it (jails have not been tested yet).
 
 ### Claude sees the system it is working on
 
-Claude Code tells the model what platform it is running on (`Platform` and
-`OS Version` in the model's context). Under the Linuxulator, the process
-reports `linux`, `uname` reports a Linux kernel, and the model plans its
-commands for Linux. That means `apt`, GNU option syntax, `/proc` layouts
-and Linux service management, on a machine that uses none of them.
-Natively, Claude Code reports `freebsd` and the model works with `pkg`,
-`sysrc`, `service`, BSD `sed`, `rc.conf` and the other tools it will
-actually find.
+Claude Code tells the model what it is running on, in three lines of its
+context. On the native build on FreeBSD 15.1 they read:
+
+```
+Platform: linux
+Shell: Bash (login shell: csh)
+OS Version: FreeBSD 15.1-RELEASE-p5
+```
+
+`Platform` says `linux` on both routes. Anthropic's Linux bundle has the
+platform written into it as a constant, and Claude Code's JavaScript is
+not modified here. That same constant makes Claude Code take its Linux code
+paths, which is why the Linux clipboard commands work.
+
+`OS Version` is read from the running system, and that is where the two
+routes differ. Natively it says FreeBSD, and so does everything Claude
+looks at: `uname`, `freebsd-version`, `/etc/rc.conf`, `pkg`. Under the
+Linuxulator, `uname` and this line report a Linux kernel (the version set
+by the `compat.linux.osrelease` sysctl), so every signal the model gets
+says Linux. It then plans for `apt`, GNU option syntax, `/proc` layouts and
+Linux service management, on a machine that has none of them. Natively,
+the `OS Version` line and every tool the model runs say FreeBSD, which
+points it to `pkg`, `sysrc`, `service`, BSD `sed` and `rc.conf`.
 
 ### One environment, not two
 
