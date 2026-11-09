@@ -311,6 +311,7 @@ principle, not tested behavior.
 | Path | Role |
 |---|---|
 | `install.sh` | download, verify, convert, install, configure |
+| `mk-release.sh` | builds the release tarball: `install.sh`, `regraft.js`, `bun-ant/`, `LICENSE`, `README.install` |
 | `regraft.js` | module graph reader and writer, ELF payload replacement, prelude |
 | `bun-ant/embedded-tools.js` | `rg` / `ugrep` / `bfs` dispatch to system tools |
 | `bun-ant/cellsegmenter.js` | `Bun.ant.CellSegmenter` replacement |

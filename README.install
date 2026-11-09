@@ -1,0 +1,68 @@
+FreeBSD-claude-native
+=====================
+
+Installs Anthropic's Claude Code as a native FreeBSD executable, with no
+Linux compatibility layer. The installer downloads the official Linux build
+of Claude Code and the matching official FreeBSD build of Bun, verifies both
+against their published SHA-256 sums, and converts Claude Code to run on
+FreeBSD Bun. Tested on FreeBSD 15.1, amd64.
+
+
+Install
+-------
+
+Run these as your own user, not as root:
+
+    mkdir -p ~/.claude
+    tar -xzf FreeBSD-claude-native.tar.gz -C ~/.claude
+    sh ~/.claude/FreeBSD-claude-native/install.sh
+
+By default the latest release is installed. To choose one:
+
+    sh ~/.claude/FreeBSD-claude-native/install.sh stable     # stable channel
+    sh ~/.claude/FreeBSD-claude-native/install.sh 2.1.319    # a specific version
+
+Claude Code needs four packages: ripgrep, ugrep, bfs and bash. Any that are
+missing are installed with pkg, through doas, sudo or su, so run the
+installer from a terminal.
+
+At the end, the installer asks whether you will use Claude Code in a
+terminal on a graphical desktop. If you answer yes, it also installs
+whichever of these are missing: symbol fonts (noto-sans-symbols,
+noto-sans-symbols2) and a clipboard tool for pasting images (xclip, or
+wl-clipboard on Wayland).
+
+Claude Code is installed to ~/.local/bin/claude. If that directory is not
+on your PATH, the installer shows how to add it.
+
+
+Update
+------
+
+Claude Code's built-in updater is turned off, because it would install the
+Linux build. To update, run the installer again:
+
+    sh ~/.claude/FreeBSD-claude-native/install.sh
+
+Keep ~/.claude/FreeBSD-claude-native for this.
+
+
+Contents
+--------
+
+    install.sh     the installer (POSIX sh, base system tools only)
+    regraft.js     converts the Linux build to run on FreeBSD Bun
+    bun-ant/       JavaScript replacements for parts of Anthropic's runtime
+    LICENSE        MIT license for the files in this tarball
+    README.install this file
+
+
+License
+-------
+
+The files in this tarball are MIT licensed; see LICENSE. Parts of bun-ant/
+are ported from Bun (copyright Oven, MIT). Claude Code itself, which the
+installer downloads and converts, remains under Anthropic's terms.
+
+Source and documentation: the claude-native directory of the FreeBSD Oasis
+repository.

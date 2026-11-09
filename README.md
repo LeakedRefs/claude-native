@@ -6,6 +6,16 @@ the base system plus four packages: `ripgrep`, `ugrep`, `bfs` and `bash`.
 
 ## Install
 
+From the release tarball (see [README.install](README.install)):
+
+```sh
+mkdir -p ~/.claude
+tar -xzf FreeBSD-claude-native.tar.gz -C ~/.claude
+sh ~/.claude/FreeBSD-claude-native/install.sh
+```
+
+From a checkout of this directory:
+
 ```sh
 sh install.sh            # latest release
 sh install.sh stable     # stable channel
@@ -122,6 +132,8 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 |---|---|
 | `TECHNICAL.md` | design overview; native versus the Linux compatibility layer |
 | `install.sh` | the installer (POSIX sh, base tools only) |
+| `mk-release.sh` | builds `release/FreeBSD-claude-native.tar.gz` |
+| `README.install` | install instructions shipped in the tarball |
 | `regraft.js` | moves the module graph onto FreeBSD Bun, adds `bun-ant/` |
 | `bun-ant/` | JavaScript replacement for `Bun.ant.CellSegmenter`; `rg`/`ugrep`/`bfs` dispatch |
 | `tools/gen-fused-data.py` | regenerates `bun-ant/fused-data.js` from Bun's tables |
@@ -130,8 +142,8 @@ Settings added to the `env` block of `~/.claude/settings.json`:
 
 ## License
 
-MIT; see [LICENSE](../LICENSE) at the repository root. Include it when
-distributing `install.sh`, `regraft.js` and `bun-ant/`.
+MIT; see [LICENSE](LICENSE), a copy of the repository root's
+[LICENSE](../LICENSE) that ships in the release tarball.
 
 `bun-ant/clusters.js`, `bun-ant/cellsegmenter.js` and `bun-ant/fused-data.js`
 port code and tables from [Bun](https://github.com/oven-sh/bun)
